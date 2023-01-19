@@ -1,11 +1,18 @@
-name: 'Your name here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'PR with json formatted merkletree'
+description: 'This action will create a PR with merged merkletree by address'
 inputs:
-  milliseconds: # change this
+  owner:
+    description: 'The owner of the repository'
     required: true
-    description: 'input description here'
-    default: 'default value if applicable'
+  repo:
+    description: 'The name of the repository'
+    required: true
+  token:
+    description: 'The token to use to access the GitHub API'
+    required: true
+  branch:
+    description: 'The branch to create the PR from'
+    required: true
 runs:
   using: 'node16'
   main: 'dist/index.js'
