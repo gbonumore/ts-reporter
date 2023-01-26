@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import isEmpty from 'lodash.isempty'
+import util from 'util'
 
 type Recipient = {
   windowIndex: number
@@ -132,6 +133,10 @@ async function run(): Promise<void> {
       }
     })
 
+    // eslint-disable-next-line no-console
+    console.log(
+      util.inspect(merkleTreesByMonth, false, null, true /* enable colors */)
+    )
     /**
      * Now we have a list of all the merkle trees by month, we need to create a new object
      * that has the user as the key and the value is an object with two keys: veAUXO and xAUXO
