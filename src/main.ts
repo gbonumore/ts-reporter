@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import isEmpty from 'lodash.isempty'
 
 type Recipient = {
   windowIndex: number
@@ -160,6 +161,8 @@ async function run(): Promise<void> {
      * }
      * }
      **/
+
+    if (isEmpty(merkleTreesByMonth)) return
 
     const merkleTreesByUser = {} as MerkleTreesByUser
     for (const [date, merkleTreesByToken] of Object.entries(
