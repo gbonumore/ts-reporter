@@ -1,25 +1,33 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 
-type Claim = {
-  [user: string]: {
-    accountIndex: number
-    amount: string
-    metadata: {
-      reason: string
-    }
-    windowIndex: number
-    proof: string[]
-  }
+type Recipient = {
+  windowIndex: number
+  accountIndex: number
+  rewards: string
+  proof: string[]
 }
 
 export type MerkleTree = {
-  id: number
-  rewardToken: string
   windowIndex: number
-  totalRewardsDistributed: string
-  merkleRoot: string
-  claims: Claim
+  chainId: number
+  aggregateRewards: {
+    address: string
+    token: string
+    decimals: number
+    amount: string
+    original_amount: string
+    pro_rata: string
+    non_active_pro_rata: string
+    redistributed_total: string
+    redistributed_to_stakers: string
+    redistributed_transferred: string
+    total_tax: string
+  }
+  recipients: {
+    [address: string]: Recipient
+  }
+  root: string
 }
 
 export type QueryResult = {
@@ -42,12 +50,18 @@ export type QueryResult = {
 }
 
 export type MerkleTreesByMonth = {
-  [month: string]: MerkleTree
+  [month: string]: {
+    veAUXO: MerkleTree
+    xAUXO: MerkleTree
+  }
 }
 
+// Extract the merkle tree by user and split it by 2 different tokens: veAUXO and xAUXO
 export type MerkleTreesByUser = {
   [user: string]: {
-    [month: string]: MerkleTreesByMonth['claims'] | {}
+    [token: string]: {
+      [month: string]: Recipient
+    }
   }
 }
 
@@ -55,10 +69,10 @@ async function run(): Promise<void> {
   try {
     const owner = core.getInput('owner', {required: true})
     const repo = core.getInput('repo', {required: true})
-    const token = core.getInput('token', {required: true})
+    const ghToken = core.getInput('token', {required: true})
     const branchInput = core.getInput('branch', {required: true})
 
-    const octokit = github.getOctokit(token)
+    const octokit = github.getOctokit(ghToken)
 
     /**
      * We need to fetch the list of files that are currently present in the
@@ -103,10 +117,15 @@ async function run(): Promise<void> {
     merkleTrees.repository.object.entries.map(entry => {
       return {
         [entry.name]: entry.object.entries.map(el => {
-          if (el.name === 'merkle-tree.json') {
+          if (el.name === 'merkle-tree-veAUXO.json') {
             const date = entry.name
             const merkleTree = JSON.parse(el.object.text) as MerkleTree
-            merkleTreesByMonth[date] = merkleTree
+            merkleTreesByMonth[date]['veAUXO'] = merkleTree
+          }
+          if (el.name === 'merkle-tree-xAUXO.json') {
+            const date = entry.name
+            const merkleTree = JSON.parse(el.object.text) as MerkleTree
+            merkleTreesByMonth[date]['xAUXO'] = merkleTree
           }
         })
       }
@@ -114,20 +133,48 @@ async function run(): Promise<void> {
 
     /**
      * Now we have a list of all the merkle trees by month, we need to create a new object
-     * that has the user as the key and the value is an object with the month as the key
-     * and the value is the claim object.
-     * This will allow us to easily query the merkle tree by user and month.
+     * that has the user as the key and the value is an object with two keys: veAUXO and xAUXO
+     * and the value is an object with the month as the key and the value is the claim
      * @example
-     * merkleTreesByUser['0x...1234']['2021-01'] => { accountIndex: 1, amount: '100000000000000', metadata: { reason: '...' }, windowIndex: 1, proof: [...] }
-     */
+     *       "0x123": {
+     *   "veAUXO": {
+     *     "2021-01": {
+     *       "windowIndex": 0,
+     *       "accountIndex": 0,
+     *       "rewards": "0",
+     *       "proof": [
+     *         "0x0000000000000000000000000000000000000000000000000000000000000000"
+     *       ]
+     *     },
+     *     "xAUXO": {
+     *       "2021-01": {
+     *         "windowIndex": 0,
+     *         "accountIndex": 0,
+     *         "rewards": "0",
+     *         "proof": [
+     *           "0x0000000000000000000000000000000000000000000000000000000000000000"
+     *         ]
+     *       },
+     *     }
+     *   }
+     * }
+     * }
+     **/
 
     const merkleTreesByUser = {} as MerkleTreesByUser
-    for (const [date, merkleTree] of Object.entries(merkleTreesByMonth)) {
-      for (const [user, claim] of Object.entries(merkleTree.claims)) {
-        if (!merkleTreesByUser[user]) {
-          merkleTreesByUser[user] = {}
+    for (const [date, merkleTreesByToken] of Object.entries(
+      merkleTreesByMonth
+    )) {
+      for (const [token, merkleTree] of Object.entries(merkleTreesByToken)) {
+        for (const [user, recipient] of Object.entries(merkleTree.recipients)) {
+          if (!merkleTreesByUser[user]) {
+            merkleTreesByUser[user] = {}
+          }
+          if (!merkleTreesByUser[user][token]) {
+            merkleTreesByUser[user][token] = {}
+          }
+          merkleTreesByUser[user][token][date] = recipient
         }
-        merkleTreesByUser[user][date] = claim
       }
     }
 
