@@ -54,9 +54,9 @@ function run() {
              * branch we want to create a pull request for.
              */
             const merkleTrees = yield octokit.graphql(`
-          query RepoFiles($owner: String!, $name: String!) {
+          query RepoFiles($owner: String!, $name: String!, $branch: String!) {
       repository(owner: $owner, name: $name) {
-        object(expression: "HEAD:reports") {
+        object(expression: $branch) {
           ... on Tree {
             entries {
               name
@@ -79,7 +79,8 @@ function run() {
       }
     }`, {
                 owner,
-                name: repo
+                name: repo,
+                branch: `${branchInput}:reports`
             });
             // **
             const merkleTreesByMonth = {};
@@ -88,11 +89,23 @@ function run() {
                     [entry.name]: entry.object.entries.map(el => {
                         if (el.name === 'merkle-tree-veAUXO.json') {
                             const date = entry.name;
+                            if (!merkleTreesByMonth[date]) {
+                                merkleTreesByMonth[date] = {
+                                    veAUXO: {},
+                                    xAUXO: {}
+                                };
+                            }
                             const merkleTree = JSON.parse(el.object.text);
                             merkleTreesByMonth[date]['veAUXO'] = merkleTree;
                         }
                         if (el.name === 'merkle-tree-xAUXO.json') {
                             const date = entry.name;
+                            if (!merkleTreesByMonth[date]) {
+                                merkleTreesByMonth[date] = {
+                                    veAUXO: {},
+                                    xAUXO: {}
+                                };
+                            }
                             const merkleTree = JSON.parse(el.object.text);
                             merkleTreesByMonth[date]['xAUXO'] = merkleTree;
                         }

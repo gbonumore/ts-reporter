@@ -1,7 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import isEmpty from 'lodash.isempty'
-import util from 'util'
 
 type Recipient = {
   windowIndex: number
@@ -83,9 +82,9 @@ async function run(): Promise<void> {
 
     const merkleTrees: QueryResult = await octokit.graphql(
       `
-          query RepoFiles($owner: String!, $name: String!) {
+          query RepoFiles($owner: String!, $name: String!, $branch: String!) {
       repository(owner: $owner, name: $name) {
-        object(expression: "HEAD:reports") {
+        object(expression: $branch) {
           ... on Tree {
             entries {
               name
@@ -109,7 +108,8 @@ async function run(): Promise<void> {
     }`,
       {
         owner,
-        name: repo
+        name: repo,
+        branch: `${branchInput}:reports`
       }
     )
 
@@ -121,11 +121,23 @@ async function run(): Promise<void> {
         [entry.name]: entry.object.entries.map(el => {
           if (el.name === 'merkle-tree-veAUXO.json') {
             const date = entry.name
+            if (!merkleTreesByMonth[date]) {
+              merkleTreesByMonth[date] = {
+                veAUXO: {} as MerkleTree,
+                xAUXO: {} as MerkleTree
+              }
+            }
             const merkleTree = JSON.parse(el.object.text) as MerkleTree
             merkleTreesByMonth[date]['veAUXO'] = merkleTree
           }
           if (el.name === 'merkle-tree-xAUXO.json') {
             const date = entry.name
+            if (!merkleTreesByMonth[date]) {
+              merkleTreesByMonth[date] = {
+                veAUXO: {} as MerkleTree,
+                xAUXO: {} as MerkleTree
+              }
+            }
             const merkleTree = JSON.parse(el.object.text) as MerkleTree
             merkleTreesByMonth[date]['xAUXO'] = merkleTree
           }
@@ -133,10 +145,6 @@ async function run(): Promise<void> {
       }
     })
 
-    // eslint-disable-next-line no-console
-    console.log(
-      util.inspect(merkleTreesByMonth, false, null, true /* enable colors */)
-    )
     /**
      * Now we have a list of all the merkle trees by month, we need to create a new object
      * that has the user as the key and the value is an object with two keys: veAUXO and xAUXO
